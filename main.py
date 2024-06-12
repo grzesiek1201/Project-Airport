@@ -1,11 +1,22 @@
-from server import Server
+from server.server import Server
+from client.client import Client
+import threading
 
 
-class Main:
-    host = "127.0.0.1"
-    port = 65432
-    version = "version: 0.1"
+def run_server():
+    server = Server()
+    server.start()
+
+
+def run_client():
+    client = Client()
+    client.connect()
+    client.send("Hello, Server!")
+    client.disconnect()
 
 
 if __name__ == "__main__":
-    Server.start()
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+
+    run_client()
