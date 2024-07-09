@@ -1,5 +1,5 @@
-from server.server import Server
-from client.client import Client
+from server import Server
+from client import Client
 import threading
 
 
