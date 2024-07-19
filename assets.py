@@ -2,22 +2,52 @@ import random as r
 import math
 import pygame
 import sys
+import time
+
+
+class AirportLogic:
+    def __init__(self):
+        self.map_size = (100000, 100000, 10000)  # width, length, height
+        self.safe_zone = (50000, 55000, 0)
+        self.air_corridor = [(50000, 50000, 5000), (50000, 60000, 0)]  # Start and end of air corridor
+        self.no_fly_zone_center = self.air_corridor[1]  # Center of the no-fly zone
+        self.no_fly_zone_radius = (10000, 10000, 5000)  # Radius of the no-fly zone
+
+    def is_within_air_corridor(self, position):
+        x, y, z = position
+        (start_x, start_y, start_z), (end_x, end_y, end_z) = self.air_corridor
+
+        return start_x <= x <= end_x and start_y <= y <= end_y and end_z <= z <= start_z
+
+    def is_within_safe_zone(self, position):
+        x, y, z = position
+        sx, sy, sz = self.safe_zone
+
+        return 0 <= x <= self.map_size[0] and \
+               0 <= y <= self.map_size[1] and \
+               0 <= z <= self.map_size[2]
+
+    def is_within_no_fly_zone(self, position):
+        x, y, z = position
+        cx, cy, cz = self.no_fly_zone_center
+        rx, ry, rz = self.no_fly_zone_radius
+
+        return cx - rx <= x <= cx + rx and cy - ry <= y <= cy + ry and cz - rz <= z <= cz + rz
 
 
 class PlaneLogic:
-    def __init__(self):
-        self.map_size = (10000, 10000, 5000)  # width, length, height
+    def __init__(self, airport_logic):
+        self.airport_logic = airport_logic
+        self.map_size = self.airport_logic.map_size
         self.start_position = self.generate_start_position()
         self.plane_speed = self.generate_plane_speed()
         self.current_fuel = 10800  # fuel for 3h
-        self.target_air_corridor = (6000, 6000, 0)  # air corridor location
+        self.target_air_corridor = self.airport_logic.air_corridor[0]  # Start of air corridor
         self.current_position = self.start_position
-
 
         pygame.init()
         self.screen = pygame.display.set_mode((800, 600))
         pygame.display.set_caption("Project Airport")
-
 
         self.background = pygame.image.load("assets/background.jpg")
         self.background = pygame.transform.scale(self.background, (800, 600))
@@ -49,24 +79,24 @@ class PlaneLogic:
         if edge == 'top':
             x = r.randint(0, width)
             y = r.randint(0, edge_width)
-            z = r.randint(2000, height)
+            z = r.randint(2000, 5000)
         elif edge == 'bottom':
             x = r.randint(0, width)
             y = r.randint(length - edge_width, length)
-            z = r.randint(2000, height)
+            z = r.randint(2000, 5000)
         elif edge == 'left':
             x = r.randint(0, edge_width)
             y = r.randint(0, length)
-            z = r.randint(2000, height)
+            z = r.randint(2000, 5000)
         elif edge == 'right':
             x = r.randint(width - edge_width, width)
             y = r.randint(0, length)
-            z = r.randint(2000, height)
+            z = r.randint(2000, 5000)
 
         return x, y, z
 
     def generate_plane_speed(self):
-        return r.randint(10, 100)
+        return r.randint(50, 80)
 
     def update_plane_position(self):
         x, y, z = self.current_position
@@ -90,6 +120,21 @@ class PlaneLogic:
 
         self.current_fuel -= 1
 
+        # Check if the plane has reached the start of the air corridor
+        if self.is_near_target(self.airport_logic.air_corridor[0]):
+            self.target_air_corridor = self.airport_logic.air_corridor[1]
+
+        # Avoid the no-fly zone by redirecting to the start of the air corridor
+        if self.airport_logic.is_within_no_fly_zone(self.current_position):
+            self.target_air_corridor = self.airport_logic.air_corridor[0]
+
+    def is_near_target(self, target, tolerance=100):
+        tx, ty, tz = target
+        x, y, z = self.current_position
+        return math.isclose(x, tx, abs_tol=tolerance) and \
+               math.isclose(y, ty, abs_tol=tolerance) and \
+               math.isclose(z, tz, abs_tol=tolerance)
+
     def draw_plane(self):
         x, y, _ = self.current_position
         screen_x = int(x * self.screen.get_width() / self.map_size[0])
@@ -109,15 +154,10 @@ class PlaneLogic:
         return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2)
 
     def collision_confirm(self, other_position):
-        if self.distance_to(other_position) <= 20:
-            return True
-        if self.current_fuel <= 0:
-            return True
-        return False
-
+        return self.airport_logic.is_collision(self.current_position, other_position) or self.current_fuel <= 0
 
 
 if __name__ == "__main__":
-    pygame.init()
-    plane_logic = PlaneLogic()
+    airport_logic = AirportLogic()
+    plane_logic = PlaneLogic(airport_logic)
     plane_logic.pygame_loop()
